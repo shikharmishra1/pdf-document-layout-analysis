@@ -24,6 +24,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILDER_IMAGE: ubuntu:24.04
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
+        FORCE_CUDA: "0"
     ports:
       - "5060:5060"
     depends_on:

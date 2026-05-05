@@ -1,6 +1,6 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
@@ -8,24 +8,22 @@ RUN apt-get update && \
 
 RUN mkdir -p /app/src/drivers && \
     addgroup --system python && \
-    adduser --system --group python && \
+    adduser --system --group --home /app python && \
     chown -R python:python /app
-
-COPY requirements-gradio.txt requirements-gradio.txt
-
-USER python
-
-ENV VIRTUAL_ENV=/app/.venv
-RUN python -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-RUN uv pip install --no-cache --upgrade pip && \
-    uv pip install --no-cache -r requirements-gradio.txt
 
 WORKDIR /app
 
-COPY ./src/drivers/gradio_app.py ./src/drivers/gradio_app.py
+COPY --chown=python:python requirements-gradio.txt requirements-gradio.txt
 
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app/src
+USER python
 
+ENV VIRTUAL_ENV=/app/.venv \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src
+
+RUN python -m venv "$VIRTUAL_ENV" && \
+    uv pip install --no-cache --python "$VIRTUAL_ENV/bin/python" \
+        -r requirements-gradio.txt
+
+COPY --chown=python:python ./src/drivers/gradio_app.py ./src/drivers/gradio_app.py
