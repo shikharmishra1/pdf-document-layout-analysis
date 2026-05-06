@@ -11,6 +11,75 @@ if (Get-Command "nvidia-smi" -ErrorAction SilentlyContinue) {
     $HAS_GPU = $true
 }
 
+function Write-GpuStackEnvFile {
+    param(
+        [string]$OutputFile = ".docker.gpu.env"
+    )
+
+    $requestedStack = if ($env:GPU_STACK_PROFILE) { $env:GPU_STACK_PROFILE.ToLowerInvariant() } else { "auto" }
+    if ($requestedStack -notin @("auto", "legacy", "nextgen")) {
+        throw "Invalid GPU_STACK_PROFILE='$requestedStack'. Use auto, legacy, or nextgen."
+    }
+
+    $legacyBuilderImage = "nvidia/cuda:12.6.0-cudnn-devel-ubuntu24.04"
+    $legacyTorchIndexUrl = "https://download.pytorch.org/whl/cu126"
+    $legacyArchList = "6.1;7.0;7.5;8.0;8.6;8.9;9.0+PTX"
+
+    $nextgenBuilderImage = "nvidia/cuda:12.8.0-cudnn-devel-ubuntu24.04"
+    $nextgenTorchIndexUrl = "https://download.pytorch.org/whl/cu128"
+    $nextgenArchList = "8.0;8.6;8.9;9.0;12.0+PTX"
+
+    $gpuName = (nvidia-smi --query-gpu=name --format=csv,noheader 2>$null | Select-Object -First 1).Trim()
+    $computeCapRaw = (nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>$null | Select-Object -First 1)
+    $computeCap = if ($computeCapRaw) { $computeCapRaw.Trim() } else { "" }
+
+    $builderImage = $legacyBuilderImage
+    $torchIndexUrl = $legacyTorchIndexUrl
+    $archList = $legacyArchList
+    $gpuStack = "legacy"
+
+    [double]$computeCapValue = 0
+    $hasComputeCap = [double]::TryParse($computeCap, [ref]$computeCapValue)
+
+    # Match select_gpu_stack.sh behavior: compute capability >= 10.0 uses nextgen stack.
+    if ($hasComputeCap -and $computeCapValue -ge 10.0) {
+        $builderImage = $nextgenBuilderImage
+        $torchIndexUrl = $nextgenTorchIndexUrl
+        $archList = $nextgenArchList
+        $gpuStack = "nextgen"
+    }
+
+    if ($requestedStack -eq "legacy") {
+        $builderImage = $legacyBuilderImage
+        $torchIndexUrl = $legacyTorchIndexUrl
+        $archList = $legacyArchList
+        $gpuStack = "legacy"
+    }
+
+    if ($requestedStack -eq "nextgen") {
+        $builderImage = $nextgenBuilderImage
+        $torchIndexUrl = $nextgenTorchIndexUrl
+        $archList = $nextgenArchList
+        $gpuStack = "nextgen"
+    }
+
+    @(
+        "BUILDER_IMAGE=$builderImage"
+        "TORCH_INDEX_URL=$torchIndexUrl"
+        "TORCH_CUDA_ARCH_LIST=$archList"
+        "GPU_STACK=$gpuStack"
+    ) | Set-Content -Path $OutputFile -Encoding ascii
+
+    Write-Host "Detected GPU: $gpuName"
+    if ($hasComputeCap) {
+        Write-Host "Detected compute capability: $computeCap"
+    } else {
+        Write-Host "Detected compute capability: unavailable (kept legacy unless overridden)"
+    }
+    Write-Host "Selected GPU stack: $gpuStack"
+    Write-Host "Wrote Docker build args to $OutputFile"
+}
+
 function Start-Services {
     # Create models directory if it doesn't exist
     if (-not (Test-Path -Path ".\models")) {
@@ -19,8 +88,9 @@ function Start-Services {
 
     if ($HAS_GPU) {
         Write-Host "NVIDIA GPU detected, starting with translation support (GPU-enabled Ollama)"
+        Write-GpuStackEnvFile
         Write-Host "Starting Ollama GPU container first..."
-        docker compose -f docker-compose-gpu.yml up -d ollama-gpu
+        docker compose --env-file .docker.gpu.env -f docker-compose-gpu.yml up -d ollama-gpu
 
         Write-Host "Waiting for Ollama to be healthy..."
         $timeout = 60
@@ -41,7 +111,7 @@ function Start-Services {
         }
 
         Write-Host "Starting all services with translation support..."
-        docker compose -f docker-compose-gpu.yml up --build pdf-document-layout-analysis-gpu pdf-document-layout-analysis-gui-gpu
+        docker compose --env-file .docker.gpu.env -f docker-compose-gpu.yml up --build pdf-document-layout-analysis-gpu pdf-document-layout-analysis-gui-gpu
     } else {
         Write-Host "No NVIDIA GPU detected, starting with translation support (CPU Ollama)"
         Write-Host "Starting Ollama container first..."
@@ -123,8 +193,9 @@ function Start-DetachedGpu {
     }
 
     Write-Host "Starting in detached mode with GPU"
+    Write-GpuStackEnvFile
     $env:RESTART_IF_NO_GPU = "true"
-    docker compose -f docker-compose-gpu.yml up --build -d pdf-document-layout-analysis-gpu
+    docker compose --env-file .docker.gpu.env -f docker-compose-gpu.yml up --build -d pdf-document-layout-analysis-gpu
     Write-Host "Main application started in background. Check status with: docker compose ps"
     Write-Host "View logs with: docker compose logs -f pdf-document-layout-analysis-gpu"
 }

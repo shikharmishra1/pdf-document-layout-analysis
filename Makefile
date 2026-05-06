@@ -8,8 +8,9 @@ else
 endif
 ifeq ($(HAS_GPU), 1)
 	@echo "NVIDIA GPU detected, starting with translation support (GPU-enabled Ollama)"
+	bash ./select_gpu_stack.sh .docker.gpu.env
 	@echo "Starting Ollama GPU container first..."
-	docker compose -f docker-compose-gpu.yml up -d ollama-gpu
+	docker compose --env-file .docker.gpu.env -f docker-compose-gpu.yml up -d ollama-gpu
 	@echo "Waiting for Ollama to be healthy..."
 	@timeout=60; while [ $$timeout -gt 0 ]; do \
 		if docker inspect --format='{{.State.Health.Status}}' ollama-service-gpu 2>/dev/null | grep -q "healthy"; then \
@@ -24,7 +25,7 @@ ifeq ($(HAS_GPU), 1)
 		echo "Warning: Ollama GPU container may not be fully healthy yet, but continuing..."; \
 	fi
 	@echo "Starting all services with translation support..."
-	docker compose -f docker-compose-gpu.yml up --build pdf-document-layout-analysis-gpu pdf-document-layout-analysis-gui-gpu
+	docker compose --env-file .docker.gpu.env -f docker-compose-gpu.yml up --build pdf-document-layout-analysis-gpu pdf-document-layout-analysis-gui-gpu
 else
 	@echo "No NVIDIA GPU detected, starting with translation support (CPU Ollama)"
 	@echo "Starting Ollama container first..."
@@ -82,6 +83,7 @@ start_detached:
 start_detached_gpu:
 	mkdir -p ./models
 	@echo "Starting in detached mode with GPU"
-	RESTART_IF_NO_GPU=true docker compose -f docker-compose-gpu.yml up --build -d pdf-document-layout-analysis-gpu
+	bash ./select_gpu_stack.sh .docker.gpu.env
+	RESTART_IF_NO_GPU=true docker compose --env-file .docker.gpu.env -f docker-compose-gpu.yml up --build -d pdf-document-layout-analysis-gpu
 	@echo "Main application started in background. Check status with: docker compose ps"
 	@echo "View logs with: docker compose logs -f pdf-document-layout-analysis-gpu"
