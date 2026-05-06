@@ -39,7 +39,12 @@ function Write-GpuStackEnvFile {
     $gpuStack = "legacy"
 
     [double]$computeCapValue = 0
-    $hasComputeCap = [double]::TryParse($computeCap, [ref]$computeCapValue)
+    $hasComputeCap = [double]::TryParse(
+        $computeCap,
+        [System.Globalization.NumberStyles]::Float,
+        [System.Globalization.CultureInfo]::InvariantCulture,
+        [ref]$computeCapValue
+    )
 
     # Match select_gpu_stack.sh behavior: compute capability >= 10.0 uses nextgen stack.
     if ($hasComputeCap -and $computeCapValue -ge 10.0) {

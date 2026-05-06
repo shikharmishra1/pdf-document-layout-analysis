@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+export LC_NUMERIC=C  # Force dot as decimal separator regardless of system locale
+
 OUTPUT_FILE="${1:-.docker.gpu.env}"
 REQUESTED_STACK="${GPU_STACK_PROFILE:-auto}"
 
