@@ -23,10 +23,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BUILDER_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu24.04
-        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu126
+        BUILDER_IMAGE: ${BUILDER_IMAGE:-nvidia/cuda:12.6.0-cudnn-devel-ubuntu24.04}
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu126}
         FORCE_CUDA: "1"
-        TORCH_CUDA_ARCH_LIST: "6.1;7.0;7.5;8.0;8.6;8.9;9.0"
+        TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-6.1;7.0;7.5;8.0;8.6;8.9;9.0}
     ports:
       - "5060:5060"
     depends_on:
