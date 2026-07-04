@@ -7,7 +7,7 @@ from os import makedirs
 from os.path import join
 from pathlib import Path
 from PIL import Image
-from pdf2image import convert_from_path
+import pypdfium2 as pdfium
 from pdf_features import PdfFeatures
 
 from src.configuration import IMAGES_ROOT_PATH, XMLS_PATH
@@ -51,5 +51,15 @@ class PdfImages:
         else:
             pdf_name = Path(pdf_path).parent.name if Path(pdf_path).name == "document.pdf" else Path(pdf_path).stem
             pdf_features.file_name = pdf_name
-        pdf_images = convert_from_path(pdf_path, dpi=dpi)
+        
+        pdf = pdfium.PdfDocument(str(pdf_path))
+        pdf_images = []
+        scale = dpi / 72
+        for i in range(len(pdf)):
+            page = pdf[i]
+            bitmap = page.render(scale=scale)
+            pil_image = bitmap.to_pil()
+            pdf_images.append(pil_image)
+        
+        
         return PdfImages(pdf_features, pdf_images, dpi)
